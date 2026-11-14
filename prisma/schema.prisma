@@ -1,10 +1,12 @@
 generator client {
-  provider = "prisma-client"
-  output   = "../src/generated/prisma"
+  provider        = "prisma-client"
+  output          = "../src/generated/prisma"
+  previewFeatures = ["postgresqlExtensions", "partialIndexes"]
 }
 
 datasource db {
-  provider = "postgresql"
+  provider   = "postgresql"
+  extensions = [pg_trgm]
 }
 
 model Client {
@@ -15,6 +17,7 @@ model Client {
 
   cars Car[]
 
+  @@index([fullName(ops: raw("gin_trgm_ops"))], type: Gin, map: "idx_clients_name_trgm")
   @@map("clients")
 }
 
@@ -27,7 +30,104 @@ model Car {
   year     Int
   mileage  Int    @default(0)
 
-  client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  client Client  @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  orders Order[]
 
+  @@index([clientId])
   @@map("cars")
+}
+
+model Service {
+  id          Int     @id @default(autoincrement())
+  name        String  @unique
+  price       Decimal @db.Decimal(10, 2)
+  durationMin Int     @map("duration_min")
+
+  orderServices OrderService[]
+
+  @@map("services")
+}
+
+model Part {
+  id       Int     @id @default(autoincrement())
+  sku      String  @unique
+  name     String
+  price    Decimal @db.Decimal(10, 2)
+  stockQty Int     @default(0) @map("stock_qty")
+
+  orderParts OrderPart[]
+  stockMoves StockMove[]
+
+  @@map("parts")
+}
+
+model Order {
+  id          Int       @id @default(autoincrement())
+  carId       Int       @map("car_id")
+  status      String    @default("new")
+  scheduledAt DateTime  @map("scheduled_at") @db.Timestamptz(6)
+  total       Decimal   @default(0) @db.Decimal(10, 2)
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  closedAt    DateTime? @map("closed_at") @db.Timestamptz(6)
+
+  car           Car            @relation(fields: [carId], references: [id])
+  orderServices OrderService[]
+  orderParts    OrderPart[]
+  stockMoves    StockMove[]
+
+  @@index([status, scheduledAt], where: raw("status IN ('new', 'in_progress')"), map: "idx_orders_active_scheduled")
+  @@index([carId, scheduledAt(sort: Desc)], map: "idx_orders_car_scheduled")
+  @@map("orders")
+}
+
+model OrderService {
+  orderId   Int     @map("order_id")
+  serviceId Int     @map("service_id")
+  qty       Int     @default(1)
+  price     Decimal @db.Decimal(10, 2)
+
+  order   Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  service Service @relation(fields: [serviceId], references: [id])
+
+  @@id([orderId, serviceId])
+  @@index([serviceId])
+  @@map("order_services")
+}
+
+model OrderPart {
+  orderId Int     @map("order_id")
+  partId  Int     @map("part_id")
+  qty     Int
+  price   Decimal @db.Decimal(10, 2)
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  part  Part  @relation(fields: [partId], references: [id])
+
+  @@id([orderId, partId])
+  @@index([partId, orderId], map: "idx_order_parts_part")
+  @@map("order_parts")
+}
+
+model StockMove {
+  id        Int      @id @default(autoincrement())
+  partId    Int      @map("part_id")
+  orderId   Int?     @map("order_id")
+  qty       Int
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  part  Part   @relation(fields: [partId], references: [id])
+  order Order? @relation(fields: [orderId], references: [id], onDelete: Restrict)
+
+  @@index([orderId])
+  @@index([partId, createdAt(sort: Desc)])
+  @@map("stock_moves")
+}
+
+model IdempotencyKey {
+  key       String   @id
+  scope     String
+  response  Json     @db.JsonB
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@map("idempotency_keys")
 }
