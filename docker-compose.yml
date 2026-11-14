@@ -10,8 +10,13 @@ services:
       POSTGRES_DB: auto_service
     ports:
       - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d auto_service"]
+      interval: 3s
+      timeout: 5s
+      retries: 20
+    tmpfs:
+      - /var/lib/postgresql/data:rw,size=512m
 
   mongodb:
     image: mongo:8
@@ -22,9 +27,24 @@ services:
       MONGO_INITDB_ROOT_PASSWORD: admin
     ports:
       - "27017:27017"
-    volumes:
-      - mongo_data:/data/db
+    tmpfs:
+      - /data/db:rw,size=512m
+      - /data/configdb:rw,size=64m
 
-volumes:
-  postgres_data:
-  mongo_data:
+  db-seed:
+    build:
+      context: .
+      dockerfile: Dockerfile.seed
+    container_name: auto-service-db-seed
+    restart: "no"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/auto_service?schema=public
+    command:
+      [
+        "sh",
+        "-c",
+        "npx prisma migrate deploy --config prisma7.config.ts && npx prisma db seed --config prisma7.config.ts",
+      ]
