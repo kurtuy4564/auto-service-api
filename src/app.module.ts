@@ -7,9 +7,10 @@ import { PrismaModule } from './prisma/prisma.module.js';
 import { CarsController } from './cars/cars.controller.js';
 import { CarsModule } from './cars/cars.module.js';
 import { OrdersModule } from './orders/orders.module.js';
+import { PartsModule } from './parts/parts.module.js';
 
 @Module({
-  imports: [ClientsModule, PrismaModule, CarsModule, OrdersModule],
+  imports: [ClientsModule, PrismaModule, CarsModule, OrdersModule, PartsModule],
   controllers: [AppController, CarsController],
   providers: [AppService, PrismaService],
 })
