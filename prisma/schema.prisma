@@ -13,5 +13,21 @@ model Client {
   phone     String   @unique
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
 
+  cars Car[]
+
   @@map("clients")
+}
+
+model Car {
+  id       Int    @id @default(autoincrement())
+  clientId Int    @map("client_id")
+  brand    String
+  model    String
+  plate    String @unique
+  year     Int
+  mileage  Int    @default(0)
+
+  client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@map("cars")
 }
