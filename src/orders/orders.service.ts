@@ -25,7 +25,7 @@ export class OrdersService {
   }
 
   async findOne(id: number) {
-    return this.prisma.order.findUnique({
+    const order = await this.prisma.order.findUnique({
       where: { id },
       select: {
         id: true,
@@ -34,6 +34,8 @@ export class OrdersService {
         scheduledAt: true,
       },
     });
+    console.log('findOne', order);
+    return order;
   }
 
   async create(createOrderDto: CreateOrderDto) {

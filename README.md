@@ -10,11 +10,11 @@ docker compose logs -f db-seed
 Дальше:
 
 Во втором терминале запустите API: npm run start:dev
-В третьем (если нужна Prisma Studio): npx prisma studio --config prisma7.config.ts
+В третьем (если нужна Prisma Studio): npx prisma studio
 
 ## Сервисы разработки
 
-- PostgreSQL — порт `5432`
+- PostgreSQL — порт `5433` на компьютере (`5432` внутри Docker)
 - MongoDB — порт `27017`
 - NestJS API — порт `3000`
 

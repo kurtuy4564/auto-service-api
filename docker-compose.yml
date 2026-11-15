@@ -9,7 +9,7 @@ services:
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: auto_service
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5433:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d auto_service"]
       interval: 3s
@@ -46,5 +46,5 @@ services:
       [
         "sh",
         "-c",
-        "npx prisma migrate deploy --config prisma7.config.ts && npx prisma db seed --config prisma7.config.ts",
+        "npx prisma migrate deploy && npx prisma db seed",
       ]
