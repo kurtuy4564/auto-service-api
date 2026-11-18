@@ -2,10 +2,14 @@ import { Injectable, UnprocessableEntityException } from '@nestjs/common';
 import { CreateOrderDto } from './dto/create-order.dto.js';
 import { EditStatusDto } from './dto/edit-status.dto.js';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { OrderEventsService } from '../order-events/order-events.service.js';
 
 @Injectable()
 export class OrdersService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly orderEventsService: OrderEventsService,
+  ) {}
 
   async findFilter({
     scheduledFrom,
@@ -39,7 +43,7 @@ export class OrdersService {
   }
 
   async create(createOrderDto: CreateOrderDto) {
-    return this.prisma.$transaction(async (prisma) => {
+    const order = await this.prisma.$transaction(async (prisma) => {
       const order = await prisma.order.create({
         data: {
           carId: createOrderDto.carId,
@@ -82,10 +86,18 @@ export class OrdersService {
 
       return order;
     });
+
+    await this.orderEventsService.recordCreated(order.id, order.status);
+    return order;
   }
 
-  async close(id: number, createOrderDto: CreateOrderDto) {
-    return this.prisma.$transaction(async (prisma) => {
+  async close(id: number) {
+    const statusChange = await this.prisma.$transaction(async (prisma) => {
+      const previousOrder = await prisma.order.findUniqueOrThrow({
+        where: { id },
+        select: { status: true },
+      });
+
       const order = await prisma.order.update({
         where: { id },
         data: { status: 'closed' },
@@ -121,20 +133,49 @@ export class OrdersService {
           });
         }
       }
+
+      return {
+        orderId: order.id,
+        previousStatus: previousOrder.status,
+        status: order.status,
+      };
     });
+
+    if (statusChange.previousStatus !== statusChange.status) {
+      await this.orderEventsService.recordStatusChanged(
+        statusChange.orderId,
+        statusChange.previousStatus,
+        statusChange.status,
+      );
+    }
   }
 
   async editStatus(id: number, editStatusDto: EditStatusDto) {
-    const res = this.prisma.order.update({
-      where: { id },
-      data: { status: editStatusDto.status },
-      select: { id: true, status: true },
-    });
+    const { order, previousStatus } = await this.prisma.$transaction(
+      async (prisma) => {
+        const previousOrder = await prisma.order.findUniqueOrThrow({
+          where: { id },
+          select: { status: true },
+        });
 
-    return res;
-  }
+        const order = await prisma.order.update({
+          where: { id },
+          data: { status: editStatusDto.status },
+          select: { id: true, status: true },
+        });
 
-  events(id: number) {
-    return `This action returns events of a #${id} order`;
+        return { order, previousStatus: previousOrder.status };
+      },
+    );
+
+    if (previousStatus !== order.status) {
+      await this.orderEventsService.recordStatusChanged(
+        order.id,
+        previousStatus,
+        order.status,
+      );
+    }
+
+    return order;
   }
 }
